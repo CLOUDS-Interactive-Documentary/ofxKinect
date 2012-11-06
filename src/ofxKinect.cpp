@@ -60,7 +60,8 @@ ofxKinect::ofxKinect() {
 	videoBytesPerPixel = 3;
 
 	kinectDevice = NULL;
-
+    registration = NULL;
+    
 	targetTiltAngleDeg = 0;
 	currentTiltAngleDeg = 0;
 	bTiltNeedsApplying = false;
@@ -127,9 +128,13 @@ bool ofxKinect::init(bool infrared, bool video, bool texture) {
 
 	if(!kinectContext.isInited()) {
 		if(!kinectContext.init()) {
+            ofLogError("ofxKinect") << "Context could not initialize";
 			return false;
 		}
 	}
+    else {
+        ofLog(OF_LOG_VERBOSE, "ofxKinect: context already inited");
+    }
 
 	bGrabberInited = true;
 
@@ -155,6 +160,8 @@ void ofxKinect::clear() {
 	depthTex.clear();
 	videoTex.clear();
 
+    kinectContext.clear();
+    
 	bGrabberInited = false;
 }
 
@@ -245,7 +252,7 @@ void ofxKinect::update() {
 		return;
 	}
 
-	if(!bNeedsUpdate && !bGotData && tryCount < 5 && ofGetElapsedTimef() - timeSinceOpen > 2.0 ){
+	if(!bNeedsUpdate && !bGotData && tryCount < 5 && ofGetElapsedTimef() - timeSinceOpen > 4.0 ){
 		close();
 		ofLog(OF_LOG_WARNING, "ofxKinect: Device %d isn't delivering data, reconnecting tries: %d", lastDeviceId, tryCount+1);
 		kinectContext.buildDeviceList();
@@ -613,11 +620,91 @@ void ofxKinect::grabVideoFrame(freenect_device *dev, void *video, uint32_t times
 	if(kinect->kinectDevice == dev) {
 		kinect->lock();
 		freenect_frame_mode curMode = freenect_get_current_video_mode(dev);
-		kinect->videoPixelsBack.setFromPixels((unsigned char*)video, width, height, curMode.data_bits_per_pixel/8);
+		//kinect->videoPixelsBack.setFromPixels((unsigned char*)video, width, height, curMode.data_bits_per_pixel/8);
+        kinect->calibrateRGBToDepth((uint8_t*)video, (uint8_t*)kinect->videoPixelsBack.getPixels());
 		kinect->bNeedsUpdate = true;
 		kinect->unlock();
 	}
 }
+
+void ofxKinect::calibrateRGBToDepth(uint8_t* rgb_raw, uint8_t* rgb_registered){
+    if(registration == NULL){
+        registration = new freenect_registration();
+        *(freenect_registration*)registration = freenect_copy_registration(kinectDevice);
+    }
+    
+    freenect_registration* reg = (freenect_registration*)registration;
+    uint32_t target_offset = reg->reg_pad_info.start_lines * getHeight();
+	int x,y;
+    memset(rgb_registered, 0, getWidth()*getHeight()*3);
+	for (y = 0; y < getHeight(); y++) for (x = 0; x < getWidth(); x++) {
+        
+		uint32_t index = y * getWidth() + x;
+		uint32_t cx,cy,cindex;
+        
+		int wz = depthPixelsRaw[index];
+		//if (wz == 0) continue;
+        
+		// coordinates in rgb image corresponding to x,y
+		cx = (reg->registration_table[index][0] + reg->depth_to_rgb_shift[wz]) / 256;
+		cy =  reg->registration_table[index][1];
+        
+		if (cx >= getWidth()) continue;
+        
+		cindex = (cy * getWidth() + cx - target_offset) * 3;
+		index  = index*3;
+        
+		rgb_registered[index+0] = rgb_raw[cindex+0];
+		rgb_registered[index+1] = rgb_raw[cindex+1];
+		rgb_registered[index+2] = rgb_raw[cindex+2];
+	}
+
+    
+}
+
+//ofVec2f ofxKinect::getRGBToDepth(int x, int y){
+//
+//    freenect_registration registration = freenect_copy_registration(kinectDevice);
+//    
+//	//freenect_registration* reg = &(kinectDevice->registration);
+//    uint32_t index = y * getWidth() + x;
+//    unsigned short wz = depthPixelsRaw[index];
+//    uint32_t cx,cy;
+//    cx = (registration.registration_table[index][0] + registration.depth_to_rgb_shift[wz]) / 256;
+//    cy =  registration.registration_table[index][1];
+//    
+//    return ofVec2f(cx,cy);
+//}
+//
+/*
+void ofxKinect::rgb_to_depth(freenect_registration* reg, uint16_t* depth_mm, uint8_t* rgb_raw, uint8_t* rgb_registered)
+{
+    uint32_t target_offset = reg->reg_pad_info.start_lines * DEPTH_Y_RES;
+	int x,y;
+    
+	for (y = 0; y < DEPTH_Y_RES; y++) for (x = 0; x < DEPTH_X_RES; x++) {
+        
+		uint32_t index = y * DEPTH_X_RES + x;
+		uint32_t cx,cy,cindex;
+        
+		int wz = depth_mm[index];
+		//if (wz == 0) continue;
+        
+		// coordinates in rgb image corresponding to x,y
+		cx = (reg->registration_table[index][0] + reg->depth_to_rgb_shift[wz]) / REG_X_VAL_SCALE;
+		cy =  reg->registration_table[index][1];
+        
+		if (cx >= DEPTH_X_RES) continue;
+        
+		cindex = (cy * DEPTH_X_RES + cx - target_offset) * 3;
+		index  = index*3;
+        
+		rgb_registered[index+0] = rgb_raw[cindex+0];
+		rgb_registered[index+1] = rgb_raw[cindex+1];
+		rgb_registered[index+2] = rgb_raw[cindex+2];
+	}
+}
+ */
 
 //---------------------------------------------------------------------------
 void ofxKinect::threadedFunction(){
@@ -630,7 +717,7 @@ void ofxKinect::threadedFunction(){
 	freenect_set_video_mode(kinectDevice, videoMode);
 	freenect_frame_mode depthMode = freenect_find_depth_mode(FREENECT_RESOLUTION_MEDIUM, bUseRegistration?FREENECT_DEPTH_REGISTERED:FREENECT_DEPTH_MM);
 	freenect_set_depth_mode(kinectDevice, depthMode);
-
+    
 	ofLog(OF_LOG_VERBOSE, "ofxKinect: Device %d %s connection opened", deviceId, serial.c_str());
 
 	freenect_start_depth(kinectDevice);
@@ -701,7 +788,7 @@ ofxKinectContext::ofxKinectContext() {
 	kinectContext = NULL;
 }
 ofxKinectContext::~ofxKinectContext() {
-	closeAll();
+//	closeAll();
 	clear();
 }
 
@@ -828,6 +915,7 @@ void ofxKinectContext::close(ofxKinect& kinect) {
 }
 
 void ofxKinectContext::closeAll() {
+
 	std::map<int,ofxKinect*>::iterator iter;
 	for(iter = kinects.begin(); iter != kinects.end(); ++iter) {
 		iter->second->close();

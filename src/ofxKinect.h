@@ -52,6 +52,7 @@ class ofxKinectContext;
 /// - http://openkinect.org/wiki/Main_Page
 /// - https://github.com/OpenKinect/libfreenect/blob/master/include/libfreenect.h
 ///
+
 class ofxKinect : public ofxBase3DVideo, protected ofThread {
 
 public:
@@ -80,6 +81,9 @@ public:
 	/// note: this calculation uses some cpu, leave off if not needed
 	void setRegistration(bool bUseRegistration=false);
 
+    
+    //Temp function to get corresponding x/y points in un registered depth
+    void calibrateRGBToDepth(uint8_t* rgb_draw, uint8_t* rgb_registered);
 	/// open the connection and start grabbing images
 	///
 	/// set the id to choose a kinect, see numAvailableDevices()
@@ -329,7 +333,8 @@ private:
 	static ofxKinectContext kinectContext;
 
 	freenect_device* kinectDevice;      ///< kinect device handle
-
+	void* registration; ///< kinect device registration
+    
 	ofShortPixels depthPixelsRawBack;	///< depth back
 	ofPixels videoPixelsBack;			///< rgb back
 

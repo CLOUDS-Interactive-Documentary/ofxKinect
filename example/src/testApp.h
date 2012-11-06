@@ -5,7 +5,7 @@
 #include "ofxKinect.h"
 
 // uncomment this to read from two kinects simultaneously
-//#define USE_TWO_KINECTS
+#define USE_TWO_KINECTS
 
 class testApp : public ofBaseApp {
 public:
@@ -23,7 +23,7 @@ public:
 	void mouseReleased(int x, int y, int button);
 	void windowResized(int w, int h);
 	
-	ofxKinect kinect;
+	ofxKinect* kinect;
 	
 #ifdef USE_TWO_KINECTS
 	ofxKinect kinect2;
