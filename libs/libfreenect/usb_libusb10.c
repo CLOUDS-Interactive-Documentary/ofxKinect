@@ -436,11 +436,11 @@ FN_INTERNAL int fnusb_close_subdevices(freenect_device *dev)
 		libusb_close(dev->usb_cam.dev);
 		dev->usb_cam.dev = NULL;
 	}
-	if (dev->usb_motor.dev) {
-		libusb_release_interface(dev->usb_motor.dev, 0);
-		libusb_close(dev->usb_motor.dev);
-		dev->usb_motor.dev = NULL;
-	}
+//	if (dev->usb_motor.dev) {
+//		libusb_release_interface(dev->usb_motor.dev, 0);
+//		libusb_close(dev->usb_motor.dev);
+//		dev->usb_motor.dev = NULL;
+//	}
 #ifdef BUILD_AUDIO
 	if (dev->usb_audio.dev) {
 		libusb_release_interface(dev->usb_audio.dev, 0);

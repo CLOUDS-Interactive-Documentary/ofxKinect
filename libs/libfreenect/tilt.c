@@ -51,7 +51,7 @@ int freenect_update_tilt_state(freenect_device *dev)
 	uint16_t ux, uy, uz;
 	int ret = fnusb_control(&dev->usb_motor, 0xC0, 0x32, 0x0, 0x0, buf, 10);
 	if (ret != 10) {
-		FN_ERROR("Error in accelerometer reading, libusb_control_transfer returned %d\n", ret);
+//		FN_ERROR("Error in accelerometer reading, libusb_control_transfer returned %d\n", ret);
 		return ret < 0 ? ret : -1;
 	}
 
